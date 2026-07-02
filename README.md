@@ -80,6 +80,6 @@ All configuration is through environment variables. See [`.env.example`](.env.ex
 - The `LEETCODE_SESSION` cookie expires periodically. Re-paste it when code stops syncing; everything else keeps working from the public username.
 - `SYNC_LIMIT` is capped at 20 because LeetCode returns only the 20 most recent accepted submissions. The daily run keeps you current from there; it does not backfill older history.
 
-## License
+## Licence
 
 [MIT](LICENSE)
