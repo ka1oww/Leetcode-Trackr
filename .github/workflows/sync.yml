@@ -1,0 +1,25 @@
+name: LeetCode → Notion sync
+
+on:
+  schedule:
+    - cron: "0 1 * * *"      # daily at 01:00 UTC
+  workflow_dispatch: {}        # allow manual runs from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python main.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          LEETCODE_USERNAME: ${{ secrets.LEETCODE_USERNAME }}
+          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}   # optional
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # optional
+          ANTHROPIC_MODEL: claude-haiku-4-5
+          SYNC_LIMIT: "20"
