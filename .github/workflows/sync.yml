@@ -21,5 +21,7 @@ jobs:
           LEETCODE_USERNAME: ${{ secrets.LEETCODE_USERNAME }}
           LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}   # optional
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # optional
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}       # optional
           ANTHROPIC_MODEL: claude-haiku-4-5
+          OPENAI_MODEL: gpt-5.4-nano
           SYNC_LIMIT: "20"

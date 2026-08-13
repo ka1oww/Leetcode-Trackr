@@ -63,6 +63,8 @@ def main():
     session = env("LEETCODE_SESSION")  # optional: unlocks submitted code
     limit = _parse_limit()
 
+    _retry_missing_summaries(notion_token, database_id)
+
     recent = leetcode.recent_accepted(username, limit)
     if not recent:
         print("No recent accepted submissions found.")
@@ -115,6 +117,33 @@ def main():
 
     print(f"\nDone. Logged {len(added)} new problem(s)." if added
           else "\nUp to date. Nothing new to log.")
+
+
+def _retry_missing_summaries(notion_token, database_id):
+    """Retry summary enrichment for only the most recent Notion entries."""
+    if not enrich.is_enabled():
+        return 0
+    try:
+        pending = notion_sync.recent_missing_summaries(notion_token, database_id)
+    except Exception as exc:
+        print(f"  (could not check summaries to retry: {exc})")
+        return 0
+
+    filled = 0
+    for item in pending:
+        summary = enrich.summarize(item["entry"], item.get("code", ""))
+        if not summary:
+            continue
+        try:
+            notion_sync.append_approach(
+                notion_token, item["page_id"], summary
+            )
+        except Exception as exc:
+            print(f"  (could not back-fill {item['entry']['title']}: {exc})")
+            continue
+        filled += 1
+        print(f"Back-filled approach: {item['entry']['title']}")
+    return filled
 
 
 def _chunks(s, n=1900):

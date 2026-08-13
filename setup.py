@@ -18,19 +18,45 @@ import requests
 
 import notion_sync
 import schema
+from main import _load_dotenv
 
 API = notion_sync.API
+SECRET_NAMES = (
+    "NOTION_TOKEN",
+    "NOTION_DATABASE_ID",
+    "LEETCODE_USERNAME",
+    "LEETCODE_SESSION",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+)
 
 
 # ---------------- Notion helpers ----------------
 
-def read_token():
-    token = (os.environ.get("NOTION_TOKEN") or "").strip()
-    if not token:
-        token = getpass.getpass("Paste your Notion internal integration secret (hidden): ").strip()
+def _prompt_token():
+    token = getpass.getpass("Paste your Notion internal integration secret (hidden): ").strip()
     if not token:
         sys.exit("No token provided. Create one at https://www.notion.so/my-integrations")
-    resp = requests.get(f"{API}/users/me", headers=notion_sync.headers(token), timeout=30)
+    return token
+
+
+def _check_token(token):
+    return requests.get(f"{API}/users/me", headers=notion_sync.headers(token), timeout=30)
+
+
+def read_token():
+    """Validate NOTION_TOKEN, prompting for a fresh one if the stored one is stale."""
+    token = (os.environ.get("NOTION_TOKEN") or "").strip()
+    from_env = bool(token)
+    if not token:
+        token = _prompt_token()
+
+    resp = _check_token(token)
+    if resp.status_code == 401 and from_env:
+        print("The stored NOTION_TOKEN was rejected (401); it may have been rotated.")
+        token = _prompt_token()
+        resp = _check_token(token)
+
     if resp.status_code == 401:
         sys.exit("Notion rejected this token (401). Re-copy the Internal Integration Secret "
                  "from https://www.notion.so/my-integrations")
@@ -43,6 +69,17 @@ def read_username():
     existing = (os.environ.get("LEETCODE_USERNAME") or "").strip()
     prompt = f"Your LeetCode username{f' [{existing}]' if existing else ''}: "
     return input(prompt).strip() or existing
+
+
+def read_optional_secret(name, explanation):
+    """Prompt for a secret without echoing it; Enter keeps/skips the value."""
+    existing = (os.environ.get(name) or "").strip()
+    print(f"\nOptional: {explanation}")
+    action = "keep the existing value" if existing else "skip"
+    value = getpass.getpass(
+        f"Paste {name} (hidden, Enter to {action}): "
+    ).strip()
+    return value or existing
 
 
 def parse_page_id(raw):
@@ -172,11 +209,10 @@ def _gh_target_repo():
     return ""
 
 
-def push_or_print_secrets(token, db_id, username):
-    manual = ('set -a && source .env && set +a\n'
-              'gh secret set NOTION_TOKEN --body "$NOTION_TOKEN"\n'
-              'gh secret set NOTION_DATABASE_ID --body "$NOTION_DATABASE_ID"\n'
-              'gh secret set LEETCODE_USERNAME --body "$LEETCODE_USERNAME"')
+def push_or_print_secrets(secrets):
+    manual = "set -a && source .env && set +a\n" + "\n".join(
+        f'printf %s "${name}" | gh secret set {name}' for name in SECRET_NAMES
+    )
 
     if not shutil.which("gh"):
         print("\nAdd these as GitHub Actions secrets. Install the GitHub CLI "
@@ -187,7 +223,7 @@ def push_or_print_secrets(token, db_id, username):
 
     target = _gh_target_repo()
     print(f"\nGitHub CLI detected. Detected target repo: {target or '(none)'}")
-    if input("Push the 3 secrets to GitHub now? [y/N] ").strip().lower() != "y":
+    if input("Push the configured secrets to GitHub now? [y/N] ").strip().lower() != "y":
         print("Skipped. To do it yourself, run from the repo:")
         print(manual)
         return
@@ -196,12 +232,13 @@ def push_or_print_secrets(token, db_id, username):
         print("No target repo given. Skipping; run manually:")
         print(manual)
         return
-    for name, value in [("NOTION_TOKEN", token), ("NOTION_DATABASE_ID", db_id), ("LEETCODE_USERNAME", username)]:
+    for name in SECRET_NAMES:
+        value = secrets.get(name, "")
         if not value:
-            print(f"  skip {name} (empty, set LEETCODE_USERNAME later)")
+            print(f"  skip {name} (empty)")
             continue
-        r = subprocess.run(["gh", "secret", "set", name, "--repo", repo, "--body", value],
-                           capture_output=True, text=True)
+        r = subprocess.run(["gh", "secret", "set", name, "--repo", repo],
+                           input=value, capture_output=True, text=True)
         print(f"  set {name}: {'OK' if r.returncode == 0 else 'FAILED ' + r.stderr.strip()}")
 
 
@@ -236,6 +273,7 @@ def _ask_page_id(token):
 
 def main():
     print("Setup: create your LeetCode revision database in Notion.")
+    _load_dotenv()
     token = read_token()
 
     db_id = existing_env_db(token)
@@ -254,15 +292,33 @@ def main():
     print(f"Open it: https://www.notion.so/{db_id.replace('-', '')}")
 
     username = read_username()
-    updates = {"NOTION_TOKEN": token, "NOTION_DATABASE_ID": db_id}
-    defaults = {}
-    if username:
-        updates["LEETCODE_USERNAME"] = username
-    else:
-        defaults["LEETCODE_USERNAME"] = ""
+    session = read_optional_secret(
+        "LEETCODE_SESSION",
+        "your LeetCode session cookie pulls submitted code, runtime and memory. "
+        "Find it in your browser's cookies for leetcode.com.",
+    )
+    anthropic_key = read_optional_secret(
+        "ANTHROPIC_API_KEY",
+        "an Anthropic API key lets Claude draft approach summaries. Bring your own key.",
+    )
+    openai_key = read_optional_secret(
+        "OPENAI_API_KEY",
+        "an OpenAI API key lets an OpenAI model draft approach summaries. "
+        "It is used only when no Anthropic key is set.",
+    )
+    secrets = {
+        "NOTION_TOKEN": token,
+        "NOTION_DATABASE_ID": db_id,
+        "LEETCODE_USERNAME": username,
+        "LEETCODE_SESSION": session,
+        "ANTHROPIC_API_KEY": anthropic_key,
+        "OPENAI_API_KEY": openai_key,
+    }
+    updates = {name: value for name, value in secrets.items() if value}
+    defaults = {name: "" for name, value in secrets.items() if not value}
     path = write_env(updates, defaults=defaults)
     print(f"Wrote {path}")
-    push_or_print_secrets(token, db_id, username)
+    push_or_print_secrets(secrets)
 
     print("\n" + ("Done. Run 'python main.py' or trigger the GitHub Action."
                   if username else

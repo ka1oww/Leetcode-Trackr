@@ -10,6 +10,7 @@ import schema
 
 API = "https://api.notion.com/v1"
 VERSION = "2022-06-28"
+ENRICH_RETRY_LIMIT = 20
 
 
 def headers(token):
@@ -39,6 +40,108 @@ def logged_numbers(token, database_id):
         else:
             break
     return nums
+
+
+def _rich_text(parts):
+    return "".join(
+        part.get("plain_text") or part.get("text", {}).get("content", "")
+        for part in (parts or [])
+    )
+
+
+def _entry_from_page(page):
+    props = page.get("properties", {})
+    difficulty = props.get(schema.DIFFICULTY, {}).get("select") or {}
+    return {
+        "title": _rich_text(props.get(schema.TITLE, {}).get("title")) or "Untitled problem",
+        "difficulty": difficulty.get("name", ""),
+        "tags": [
+            tag.get("name", "")
+            for tag in props.get(schema.TAGS, {}).get("multi_select", [])
+            if tag.get("name")
+        ],
+    }
+
+
+def _page_content(token, page_id):
+    """Return whether Approach has text, and any stored submitted code.
+
+    The scan stops at the first non-empty Approach block, so the returned code
+    is empty for pages that already have a summary and need no enrichment.
+    """
+    url = f"{API}/blocks/{page_id}/children"
+    params = {"page_size": 100}
+    in_approach = False
+    in_code = False
+    code_chunks = []
+    while True:
+        resp = requests.get(url, headers=headers(token), params=params, timeout=30)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Notion block query failed: {resp.status_code} {resp.text}")
+        data = resp.json()
+        for block in data.get("results", []):
+            block_type = block.get("type", "")
+            body = block.get(block_type, {})
+            text = _rich_text(body.get("rich_text"))
+            if block_type == "heading_2":
+                in_approach = text.strip().lower() == "approach"
+                in_code = text.strip().lower() == "submitted code"
+                continue
+            if in_approach and text.strip():
+                return True, ""
+            if in_code and block_type == "code":
+                code_chunks.append(text)
+        if not data.get("has_more"):
+            break
+        params["start_cursor"] = data["next_cursor"]
+    return False, "".join(code_chunks)
+
+
+def recent_missing_summaries(token, database_id, limit=ENRICH_RETRY_LIMIT):
+    """Inspect a bounded recent window and return pages missing an Approach."""
+    limit = max(1, min(ENRICH_RETRY_LIMIT, int(limit)))
+    payload = {
+        "page_size": limit,
+        "sorts": [{"property": schema.DATE_SOLVED, "direction": "descending"}],
+    }
+    resp = requests.post(
+        f"{API}/databases/{database_id}/query",
+        headers=headers(token),
+        json=payload,
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Notion retry query failed: {resp.status_code} {resp.text}")
+
+    missing = []
+    for page in resp.json().get("results", [])[:limit]:
+        has_approach, code = _page_content(token, page["id"])
+        if not has_approach:
+            missing.append({
+                "page_id": page["id"],
+                "entry": _entry_from_page(page),
+                "code": code,
+            })
+    return missing
+
+
+def append_approach(token, page_id, summary):
+    """Append a recovered Approach section to an existing page."""
+    # Back-filled entries get Approach at the end of the page, not at the top as create_page does.
+    children = [
+        {"object": "block", "type": "heading_2",
+         "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Approach"}}]}},
+        {"object": "block", "type": "paragraph",
+         "paragraph": {"rich_text": [{"type": "text", "text": {"content": summary[:1900]}}]}},
+    ]
+    resp = requests.patch(
+        f"{API}/blocks/{page_id}/children",
+        headers=headers(token),
+        json={"children": children},
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Notion append summary failed: {resp.status_code} {resp.text}")
 
 
 def create_page(token, database_id, entry, content_blocks=None):
