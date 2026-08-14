@@ -39,7 +39,7 @@ If you would rather build it by hand, make a full-page Notion database called
 | `Date Solved` | Date         |                                        |
 | `URL`         | URL          |                                        |
 | `Status`      | Select       | New / Learning / Mastered (a plain **Select**, not Notion's native "Status" type, which the API cannot create) |
-| `Confidence`  | Number       | 1 (hard) to 5 (easy)                   |
+| `Confidence`  | Select       | Again / Hard / Good / Easy; set it after you revise, the sync clears it |
 | `Next Review` | Date         | spaced-repetition due date             |
 | `Reviews`     | Number       | times reviewed                         |
 

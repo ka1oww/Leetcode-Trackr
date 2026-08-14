@@ -11,6 +11,7 @@ import sys
 import enrich
 import leetcode
 import notion_sync
+import schema
 import srs
 
 
@@ -63,6 +64,7 @@ def main():
     session = env("LEETCODE_SESSION")  # optional: unlocks submitted code
     limit = _parse_limit()
 
+    _reschedule_reviews(notion_token, database_id)
     _retry_missing_summaries(notion_token, database_id)
 
     recent = leetcode.recent_accepted(username, limit)
@@ -92,7 +94,6 @@ def main():
             "date": solved,
             "url": f"https://leetcode.com/problems/{slug}/",
             "status": "New",
-            "confidence": 1,
             "next_review": srs.first_review(),
         }
 
@@ -117,6 +118,20 @@ def main():
 
     print(f"\nDone. Logged {len(added)} new problem(s)." if added
           else "\nUp to date. Nothing new to log.")
+
+
+def _reschedule_reviews(notion_token, database_id):
+    """Close the review loop before logging anything new: entries that are due
+    and rated get their next date. A Notion hiccup here should not stop new
+    problems from syncing, hence the broad catch."""
+    try:
+        if notion_sync.ensure_confidence_property(notion_token, database_id):
+            print(f"Upgraded the database: '{schema.CONFIDENCE}' is now a select.")
+        n = notion_sync.reschedule_due(notion_token, database_id)
+        if n:
+            print(f"Rescheduled {n} reviewed problem(s).")
+    except Exception as e:
+        print(f"  (review reschedule skipped: {e})")
 
 
 def _retry_missing_summaries(notion_token, database_id):

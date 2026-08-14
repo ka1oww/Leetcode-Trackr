@@ -12,6 +12,7 @@ It runs itself on **GitHub Actions**, needs only a LeetCode username to start, a
 
 - **Runs daily, unattended.** A GitHub Actions cron pulls the latest accepted submissions. No server to host.
 - **Schedules revision.** Each problem gets a `Next Review` date (Leitner intervals). Filter a Notion view to "due today" and that view is the day's revision queue.
+- **Reschedules from your rating.** After you revise a due problem, set its `Confidence` on the row (Again, Hard, Good or Easy). The next sync pushes `Next Review` out by the matching Leitner interval and clears the rating, so each rating reschedules exactly once.
 - **Summarises the approach (optional).** Bring your own Anthropic or OpenAI API key and Claude or an OpenAI model writes two or three sentences on the method and complexity for each problem. Anthropic is preferred when both keys are set. Without a key no summary is written automatically: the entry is still created and you write the approach yourself in the `My notes` section.
 - **Zero-config capture.** Works from a public LeetCode username. Add a session cookie to also pull the submitted code, runtime, and memory.
 - **No heavy dependencies.** Plain `requests`; the Notion, LeetCode and AI provider calls are all raw HTTP.
@@ -23,7 +24,7 @@ GitHub Actions (cron, daily)
       |
       |-- leetcode.py     pull recent accepted submissions + problem metadata (GraphQL)
       |-- enrich.py       optional: Claude or OpenAI summarises the approach
-      |-- srs.py          assign the first spaced-repetition review date
+      |-- srs.py          compute first and follow-up review dates (Leitner)
       `-- notion_sync.py  write into the Notion database (dedupe by problem number)
 ```
 
@@ -48,6 +49,12 @@ GitHub Actions (cron, daily)
 
 That is the whole tool. Open the database (the link `setup.py` prints) and add a view
 filtered to **Next Review on or before today** as your daily revision queue.
+
+When you have revised a problem from that queue, set its **Confidence** on the row:
+Again, Hard, Good or Easy. The next sync (the daily run, or `python main.py`)
+reschedules `Next Review` with the matching Leitner interval and clears the rating,
+ready for the next pass. Databases created before `Confidence` existed gain the
+property automatically on their first sync.
 
 ## Run it daily on autopilot (optional)
 

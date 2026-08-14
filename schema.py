@@ -4,6 +4,7 @@ Both setup.py (which CREATES the property types via POST /v1/databases) and
 notion_sync.create_page (which WRITES property values) reference the property
 names here, so the two can never drift.
 """
+import srs
 
 DB_TITLE = "LeetCode Log"
 
@@ -18,6 +19,11 @@ STATUS = "Status"
 CONFIDENCE = "Confidence"
 NEXT_REVIEW = "Next Review"
 REVIEWS = "Reviews"
+
+# Confidence is a SELECT the user sets after revising a due problem; the sync
+# reschedules Next Review from it and clears it. Option names come from
+# srs.CONFIDENCE_OPTIONS so they cannot drift from the Leitner intervals.
+_CONFIDENCE_COLOURS = {"Again": "red", "Hard": "yellow", "Good": "blue", "Easy": "green"}
 
 # Create-time type configs (classic Notion-Version 2022-06-28 shape: these go
 # straight under "properties" in POST /v1/databases). Exactly one title.
@@ -39,7 +45,10 @@ PROPERTY_SCHEMA = {
         {"name": "Learning", "color": "blue"},
         {"name": "Mastered", "color": "green"},
     ]}},
-    CONFIDENCE: {"number": {"format": "number"}},
+    CONFIDENCE: {"select": {"options": [
+        {"name": name, "color": _CONFIDENCE_COLOURS.get(name, "default")}
+        for name in srs.CONFIDENCE_OPTIONS
+    ]}},
     NEXT_REVIEW: {"date": {}},
     REVIEWS: {"number": {"format": "number"}},
 }
