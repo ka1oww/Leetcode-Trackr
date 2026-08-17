@@ -1,4 +1,4 @@
-# leetcode-notion-revision
+# Leetcode-Trackr
 
 A daily job that logs my solved LeetCode problems into Notion and schedules each one for spaced-repetition review.
 
