@@ -1,0 +1,60 @@
+name: Keep-alive
+
+# GitHub automatically disables a scheduled workflow (the daily sync included)
+# after 60 days with no repository activity. This job exists to make sure
+# that never happens silently.
+#
+# The primary defense is a real commit: GitHub's own inactivity clock is
+# reset by repository activity, and the documented, battle-tested way to
+# generate that is a small commit to the default branch (see docs/keepalive.md
+# for the source trail -- calling the "enable" API alone is not documented to
+# reset the clock, and prior art that tried API-only re-enabling had to switch
+# to a commit-based approach because it didn't hold). So each run here writes
+# a one-line timestamp marker file and pushes it.
+#
+# As a second, redundant safety net, the job also explicitly re-enables the
+# daily sync workflow via the Actions API, in case it was ever disabled by
+# some other means (e.g. a maintainer toggled it off by hand and forgot).
+#
+# Either step failing fails this whole run loudly, so GitHub's default
+# workflow-failure email reaches the repo owner instead of the keep-alive
+# silently doing nothing.
+
+on:
+  schedule:
+    - cron: "17 4 1 * *"   # 1st of every month -- comfortably inside the 60-day window
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push a keep-alive commit to the default branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p .github/keepalive
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive/last-run.txt
+          git add .github/keepalive/last-run.txt
+          if git diff --cached --quiet; then
+            git commit --allow-empty -m "chore: keep-alive $(date -u +%Y-%m-%d)"
+          else
+            git commit -m "chore: keep-alive $(date -u +%Y-%m-%d)"
+          fi
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Re-enable the daily sync workflow (belt-and-suspenders)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          workflow_id=$(gh api "repos/${{ github.repository }}/actions/workflows/sync.yml" --jq .id)
+          gh api --method PUT "repos/${{ github.repository }}/actions/workflows/${workflow_id}/enable"
+          echo "Re-enabled workflow id ${workflow_id} (sync.yml)."
