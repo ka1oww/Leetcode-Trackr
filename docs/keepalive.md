@@ -43,7 +43,7 @@ Both steps run under `set -euo pipefail` (the push) and rely on `gh api`'s
 non-zero exit on a non-2xx response (the enable call). If either fails, the
 job fails, and GitHub's default workflow-failure notification emails the
 repo owner — the same "honest failure" behavior as the daily sync (see the
-"Failure behavior" section of the README).
+"Reliability" section of the README).
 
 ## Schedule
 
