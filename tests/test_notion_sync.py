@@ -117,5 +117,74 @@ class NotionRetryTests(unittest.TestCase):
         self.assertEqual(body["children"][1]["paragraph"]["rich_text"][0]["text"]["content"], "Recovered summary")
 
 
+class LoggedNumbersTests(unittest.TestCase):
+    """logged_numbers is the dedupe key main() relies on before syncing on, so
+    both its pagination and its Notion-API-error contract are covered here
+    with stubbed HTTP responses (no real network, no secrets)."""
+
+    @mock.patch("notion_sync.requests.post")
+    def test_paginates_and_collects_every_number(self, post):
+        post.side_effect = [
+            response({
+                "results": [
+                    {"properties": {schema.NUMBER: {"number": 1}}},
+                    {"properties": {schema.NUMBER: {"number": 2}}},
+                ],
+                "has_more": True,
+                "next_cursor": "cursor-2",
+            }),
+            response({
+                "results": [{"properties": {schema.NUMBER: {"number": 3}}}],
+                "has_more": False,
+            }),
+        ]
+
+        self.assertEqual(notion_sync.logged_numbers("token", "db-1"), {1, 2, 3})
+        self.assertEqual(post.call_count, 2)
+
+    @mock.patch("notion_sync.requests.post")
+    def test_raises_on_notion_api_error(self, post):
+        post.return_value = response({}, status_code=401)
+
+        with self.assertRaises(RuntimeError):
+            notion_sync.logged_numbers("token", "db-1")
+
+
+class CreatePageTests(unittest.TestCase):
+    """create_page is the write side of the sync; verify both the payload it
+    sends and that a Notion API error surfaces as a RuntimeError main() can
+    record instead of swallowing."""
+
+    @mock.patch("notion_sync.requests.post")
+    def test_sends_the_entry_as_notion_properties(self, post):
+        post.return_value = response({"id": "new-page"})
+        entry = {
+            "title": "1. Two Sum", "number": 1, "tags": ["Array", "Hash Table"],
+            "date": "2026-08-26", "url": "https://leetcode.com/problems/two-sum/",
+            "difficulty": "Easy", "next_review": "2026-08-27",
+        }
+
+        result = notion_sync.create_page("token", "db-1", entry)
+
+        self.assertEqual(result, {"id": "new-page"})
+        body = post.call_args.kwargs["json"]
+        self.assertEqual(body["parent"], {"database_id": "db-1"})
+        props = body["properties"]
+        self.assertEqual(props[schema.NUMBER]["number"], 1)
+        self.assertEqual(props[schema.NEXT_REVIEW]["date"]["start"], "2026-08-27")
+        self.assertEqual(props[schema.DIFFICULTY]["select"]["name"], "Easy")
+
+    @mock.patch("notion_sync.requests.post")
+    def test_raises_on_notion_api_error(self, post):
+        post.return_value = response({}, status_code=400)
+        entry = {
+            "title": "1. Two Sum", "number": 1, "tags": [], "date": "2026-08-26",
+            "url": "https://leetcode.com/problems/two-sum/", "next_review": "2026-08-27",
+        }
+
+        with self.assertRaises(RuntimeError):
+            notion_sync.create_page("token", "db-1", entry)
+
+
 if __name__ == "__main__":
     unittest.main()
