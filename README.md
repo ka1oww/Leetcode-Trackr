@@ -1,8 +1,8 @@
 # Leetcode-Trackr
 
-![The Notion tracker: solved problems with spaced-repetition Next Review dates](docs/screenshot.png)
-
-<!-- paused: waiting for screenshot image at data/lt-cron-keepalive/screenshot.png -->
+<!-- Screenshot of the Notion tracker goes here: drop the PNG at
+     docs/screenshot.png and replace this comment with
+     ![The Notion tracker: solved problems with spaced-repetition Next Review dates](docs/screenshot.png) -->
 
 A daily job that logs my solved LeetCode problems into Notion and schedules each one for spaced-repetition review.
 
@@ -83,6 +83,9 @@ Optional extras, as secrets or lines in `.env`: `ANTHROPIC_API_KEY` or
   GitHub Actions run itself show as failed, and GitHub's default
   workflow-failure email goes to the repo owner automatically — no extra
   config, no new secret.
+  The one exception is the optional code fetch: `LEETCODE_SESSION` is optional
+  and its cookie expires routinely, so a failure there is printed in the run
+  log but does not fail the job — the entry is still logged, without its code.
 - **Stays enabled.** GitHub auto-disables any scheduled workflow after 60 days
   with no repository activity, which would otherwise kill the daily sync
   silently. `.github/workflows/keepalive.yml` runs monthly, pushes a small

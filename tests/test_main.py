@@ -42,7 +42,7 @@ class RetryEnrichmentTests(unittest.TestCase):
             "code": "def two_sum(): pass",
         }]
 
-        filled = main._retry_missing_summaries("notion-token", "database-id")
+        filled = main._retry_missing_summaries("notion-token", "database-id", [])
 
         self.assertEqual(filled, 1)
         summarize.assert_called_once_with(
@@ -55,7 +55,7 @@ class RetryEnrichmentTests(unittest.TestCase):
     @mock.patch.dict(os.environ, {}, clear=True)
     @mock.patch("main.notion_sync.recent_missing_summaries")
     def test_retry_query_is_skipped_without_a_provider_key(self, recent_missing):
-        self.assertEqual(main._retry_missing_summaries("token", "database"), 0)
+        self.assertEqual(main._retry_missing_summaries("token", "database", []), 0)
         recent_missing.assert_not_called()
 
     @mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}, clear=True)
@@ -69,13 +69,15 @@ class RetryEnrichmentTests(unittest.TestCase):
             "code": "",
         }]
 
-        self.assertEqual(main._retry_missing_summaries("token", "database"), 0)
+        self.assertEqual(main._retry_missing_summaries("token", "database", []), 0)
         append_approach.assert_not_called()
 
 
 class HonestFailureTests(unittest.TestCase):
     """Every LeetCode API error, Notion API error and partial-sync failure must
-    make main() exit non-zero so GitHub emails the owner. Nothing is swallowed."""
+    make main() exit non-zero so GitHub emails the owner. Nothing is swallowed.
+    The single exception is the optional code fetch behind LEETCODE_SESSION,
+    whose routine cookie expiry is printed but is not an outage."""
 
     SUB = {"id": 111, "title": "Two Sum", "titleSlug": "two-sum",
            "timestamp": "1756000000"}
@@ -160,7 +162,7 @@ class HonestFailureTests(unittest.TestCase):
                "_retry_missing_summaries": {"return_value": 0}})
         self.assertEqual(code, 1)
 
-    def test_code_fetch_failure_is_loud_but_entry_still_logs(self):
+    def test_code_fetch_failure_is_loud_but_does_not_fail_the_run(self):
         code, mocks = self.run_main(
             env=dict(self.ENV, LEETCODE_SESSION="stale-cookie"),
             **{"leetcode.recent_accepted": {"return_value": [self.SUB]},
@@ -172,7 +174,7 @@ class HonestFailureTests(unittest.TestCase):
                "enrich.summarize": {"return_value": ""},
                "_reschedule_reviews": {},
                "_retry_missing_summaries": {"return_value": 0}})
-        self.assertEqual(code, 1)
+        self.assertIsNone(code)
         mocks["create_page"].assert_called_once()
 
     def test_code_fetch_is_skipped_without_a_session(self):

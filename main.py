@@ -142,9 +142,11 @@ def _log_new_problems(notion_token, database_id, username, session, limit,
             try:
                 code = leetcode.submission_detail(sub["id"], session)["code"]
             except Exception as exc:
-                # Still log the entry without its code, but say so loudly.
-                failures.append(
-                    f"LeetCode API: could not fetch submitted code for {slug} "
+                # LEETCODE_SESSION is optional and its cookie expires
+                # routinely, so this is printed but never fails the run: the
+                # entry still lands, only without its code.
+                print(
+                    f"Warning: could not fetch submitted code for {slug} "
                     f"(LEETCODE_SESSION may be missing or expired): {exc}")
 
         try:
@@ -176,11 +178,10 @@ def _reschedule_reviews(notion_token, database_id, failures):
         failures.append(f"Notion API: review reschedule failed: {exc}")
 
 
-def _retry_missing_summaries(notion_token, database_id, failures=None):
+def _retry_missing_summaries(notion_token, database_id, failures):
     """Retry summary enrichment for only the most recent Notion entries."""
     if not enrich.is_enabled():
         return 0
-    failures = [] if failures is None else failures
     try:
         pending = notion_sync.recent_missing_summaries(notion_token, database_id)
     except Exception as exc:

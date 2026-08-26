@@ -43,11 +43,7 @@ jobs:
           mkdir -p .github/keepalive
           date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive/last-run.txt
           git add .github/keepalive/last-run.txt
-          if git diff --cached --quiet; then
-            git commit --allow-empty -m "chore: keep-alive $(date -u +%Y-%m-%d)"
-          else
-            git commit -m "chore: keep-alive $(date -u +%Y-%m-%d)"
-          fi
+          git commit -m "chore: keep-alive $(date -u +%Y-%m-%d)"
           git push origin HEAD:${{ github.ref_name }}
 
       - name: Re-enable the daily sync workflow (belt-and-suspenders)

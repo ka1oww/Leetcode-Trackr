@@ -14,7 +14,10 @@ can along the way. This is deliberate: GitHub's default workflow-failure
 email is the alerting mechanism, so a swallowed exception here is a silent
 outage for the repo owner. When touching `main.py`, keep that contract: never
 add a bare `except: pass`/`print(...)`-and-continue around a LeetCode or
-Notion call without also appending to `failures`.
+Notion call without also appending to `failures`. The one deliberate
+exception is the optional code fetch behind `LEETCODE_SESSION`: that cookie
+expires routinely and the entry still lands without its code, so the failure
+is printed but deliberately kept out of `failures`.
 
 `tests/test_main.py`'s `HonestFailureTests` exercises this by patching
 `main.<name>` targets directly with `unittest.mock.patch`. A patch target
