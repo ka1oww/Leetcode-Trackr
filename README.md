@@ -1,10 +1,20 @@
 # Leetcode-Trackr
 
-<!-- Screenshot of the Notion tracker goes here: drop the PNG at
-     docs/screenshot.png and replace this comment with
-     ![The Notion tracker: solved problems with spaced-repetition Next Review dates](docs/screenshot.png) -->
-
 A daily job that logs my solved LeetCode problems into Notion and schedules each one for spaced-repetition review.
+
+## What it looks like
+
+The Notion database it fills in, one row per accepted submission:
+
+![The LeetCode Log database in Notion: one row per solved problem with date, difficulty, language, link, and memory](docs/images/log-table.png)
+
+Each row is a page with the full property set, including runtime and auto-applied topic tags:
+
+![A problem page's properties: date solved, difficulty, language, link, memory, runtime, status, and topic tags](docs/images/page-properties.png)
+
+The page body holds an auto-generated approach summary and the submitted code:
+
+![A problem page's body: the auto-generated approach summary followed by the submitted code](docs/images/approach-code.png)
 
 Technical interviews are heavily DSA-based, so revising DSA well matters, and re-solving every problem from scratch is too slow. This logs each solved problem into a Notion tracker with a record of how I approached it: my first intuition when I saw the problem, why that intuition was wrong, the correct method, and the optimisations I made. It then schedules each problem for spaced-repetition review, so the ones I am about to forget come back first.
 
