@@ -1,12 +1,14 @@
 # Leetcode-Trackr
 
+<!-- Screenshot of the Notion tracker goes here: drop the PNG at
+     docs/screenshot.png and replace this comment with
+     ![The Notion tracker: solved problems with spaced-repetition Next Review dates](docs/screenshot.png) -->
+
 A daily job that logs my solved LeetCode problems into Notion and schedules each one for spaced-repetition review.
 
 Technical interviews are heavily DSA-based, so revising DSA well matters, and re-solving every problem from scratch is too slow. This logs each solved problem into a Notion tracker with a record of how I approached it: my first intuition when I saw the problem, why that intuition was wrong, the correct method, and the optimisations I made. It then schedules each problem for spaced-repetition review, so the ones I am about to forget come back first.
 
 It runs itself on **GitHub Actions**, needs only a LeetCode username to start, and can optionally use **Claude or an OpenAI model** to draft the approach summary for each solution with your own API key.
-
-<!-- Add a screenshot of your Notion database here:  ![demo](docs/demo.png) -->
 
 ## What it does
 
@@ -71,6 +73,27 @@ To sync every day with no machine of yours running, use GitHub Actions:
 Optional extras, as secrets or lines in `.env`: `ANTHROPIC_API_KEY` or
 `OPENAI_API_KEY` (Claude or OpenAI approach summaries) and `LEETCODE_SESSION`
 (pulls your submitted code, runtime and memory). Bring your own provider key.
+
+## Reliability
+
+- **Fails loudly, not silently.** Every LeetCode API error, Notion API error, or
+  partial-sync failure (a problem that could not be fetched or logged) is
+  recorded during the run; if anything failed, `main.py` exits non-zero at the
+  end even though it keeps syncing what it can. A non-zero exit makes the
+  GitHub Actions run itself show as failed, and GitHub's default
+  workflow-failure email goes to the repo owner automatically — no extra
+  config, no new secret.
+  The one exception is the optional code fetch: `LEETCODE_SESSION` is optional
+  and its cookie expires routinely, so a failure there is printed in the run
+  log but does not fail the job — the entry is still logged, without its code.
+- **Stays enabled.** GitHub auto-disables any scheduled workflow after 60 days
+  with no repository activity, which would otherwise kill the daily sync
+  silently. `.github/workflows/keepalive.yml` runs monthly, pushes a small
+  keep-alive commit to the default branch (the mechanism that actually resets
+  GitHub's inactivity clock), and re-enables the daily workflow via the
+  Actions API as a second safety net. It fails loudly the same way if either
+  step fails. See [`docs/keepalive.md`](docs/keepalive.md) for why a commit is
+  used instead of relying on the enable API alone.
 
 ## Configuration
 
